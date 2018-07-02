@@ -1,0 +1,8 @@
+export HOME="/root"
+alias ..="cd .."
+alias ...="cd ../.."
+alias cls="clear"
+alias ls="ls -a"
+alias ll="ls -l"
+alias rgrep="grep -r"
+alias dmtail="dmesg | tail"

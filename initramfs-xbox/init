@@ -1,0 +1,55 @@
+#!/bin/busybox sh
+name="initramfs-xbox"
+kmsg="/dev/kmsg"
+init="/sbin/init"
+/bin/busybox --install -s
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev
+for i in $(cat /proc/cmdline); do
+    case "$i" in
+        root\=*)
+            root="${i#*=}"
+            case "$root" in
+                *UUID\=*)
+                    uuid="$(echo ${root#*=} | sed 's/\"//g')"
+                    root="$(blkid | grep -m 1 $uuid)"
+                    root="${root%:*}"
+                    ;;
+            esac
+            ;;
+        init\=*)
+            init="$(echo ${i#*=} | sed 's/\"//g')"
+            ;;
+        noswitchroot*)
+            noswitchroot="1"
+            ;;
+    esac
+done
+echo "$name: root=\"$root\"" >$kmsg
+echo "$name: init=\"$init\"" >$kmsg
+if [ ! x"$noswitchroot" = x"1" ]; then
+    echo "$name: press any key to start a shell..." >$kmsg
+    if read -t 5 -n 1 -s; then
+        noswitchroot="1"
+    fi
+fi
+if [ ! x"$noswitchroot" = x"1" ]; then
+    if [ ! -b "$root" ]; then
+        echo "$name: \`root=' partition not found; cannot perform \`switch_root'" >$kmsg
+    else
+        if mount -r "$root" /mnt/root; then
+            if [ -e /mnt/root"$init" ] || [ -h /mnt/root"$init" ]; then
+                umount -l /dev /sys /proc
+                exec switch_root /mnt/root "$init"
+            else
+                echo "$name: ERROR: could not perform \`switch_root': \`init=' not found in root partition" >$kmsg
+            fi
+        else
+            echo "$name: ERROR: could not mount root partition to perform \`switch_root'" >$kmsg
+        fi
+    fi
+fi
+export ENV="/etc/profile"
+echo "$name: starting shell..." >$kmsg
+exec setsid cttyhack sh
